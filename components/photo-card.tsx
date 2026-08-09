@@ -23,6 +23,7 @@ import { CameraCombobox } from "@/components/camera-combobox"
 import { DateTimeField } from "@/components/date-time-field"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { formatExifDateTimeForDisplay, formatInputValueForDisplay } from "@/lib/date"
+import { downloadObjectUrl } from "@/lib/download"
 import { isWritableFormat } from "@/lib/exif"
 import { usePhotoStore } from "@/lib/store"
 import type { CameraPreset, PhotoItem, PhotoOverrides } from "@/lib/exif/types"
@@ -85,16 +86,17 @@ export const PhotoCard = React.memo(function PhotoCard({ photo, index = 0 }: Pho
   const originalDate = formatExifDateTimeForDisplay(photo.originalExif?.dateTimeOriginal)
 
   async function handleDownloadSingle() {
-    await processPhotos([photo.id])
-    const latest = usePhotoStore.getState().photos.find((p) => p.id === photo.id)
-    if (!latest?.resultUrl) {
-      toast.error("Couldn't process this photo")
-      return
+    try {
+      await processPhotos([photo.id])
+      const latest = usePhotoStore.getState().photos.find((p) => p.id === photo.id)
+      if (!latest?.resultUrl) {
+        toast.error(latest?.error ? `Couldn't process this photo: ${latest.error}` : "Couldn't process this photo")
+        return
+      }
+      downloadObjectUrl(latest.resultUrl, latest.name)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't process this photo")
     }
-    const a = document.createElement("a")
-    a.href = latest.resultUrl
-    a.download = latest.name
-    a.click()
   }
 
   return (

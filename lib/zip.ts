@@ -23,7 +23,11 @@ export async function createZip(entries: ZipEntry[]): Promise<Blob> {
     })
   })
 
-  return new Blob([new Uint8Array(zipped)], { type: "application/zip" })
+  // Copy into a dense ArrayBuffer — Blob rejects SharedArrayBuffer-backed views
+  // under current DOM typings, and some engines are picky about byteOffset views.
+  const copy = new Uint8Array(zipped.byteLength)
+  copy.set(zipped)
+  return new Blob([copy], { type: "application/zip" })
 }
 
 /** Ensures unique file names inside the archive (two "IMG_0001.jpg" would collide). */

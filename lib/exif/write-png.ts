@@ -109,7 +109,7 @@ export async function writePngExif(file: File | Blob, edits: ResolvedExifEdits):
 
   const hasContent = Boolean(edits.make || edits.model || edits.dateTimeOriginal)
   if (!hasContent && !edits.stripGps) {
-    return new Blob([bytes], { type: "image/png" })
+    return new Blob([buffer], { type: "image/png" })
   }
 
   const chunks = parsePngChunks(bytes).filter((chunk) => chunk.type !== "eXIf")
@@ -120,5 +120,6 @@ export async function writePngExif(file: File | Blob, edits: ResolvedExifEdits):
     chunks.splice(insertAt, 0, { type: "eXIf", data: buildTiffExifBlock(edits) })
   }
 
-  return new Blob([serializePngChunks(chunks)], { type: "image/png" })
+  const out = serializePngChunks(chunks)
+  return new Blob([out], { type: "image/png" })
 }
