@@ -69,10 +69,11 @@ function PhotoEditFields({ photo, cameras, onUpdate, onAddCustomCamera }: PhotoE
   )
 }
 
-export function PhotoCard({ photo, index = 0 }: PhotoCardProps) {
+export const PhotoCard = React.memo(function PhotoCard({ photo, index = 0 }: PhotoCardProps) {
   const isMobile = useIsMobile()
   const cameras = usePhotoStore((s) => s.cameras)
-  const selectedIds = usePhotoStore((s) => s.selectedIds)
+  // Per-id selector so toggling one checkbox doesn't re-render every card.
+  const isSelected = usePhotoStore((s) => s.selectedIds.has(photo.id))
   const toggleSelected = usePhotoStore((s) => s.toggleSelected)
   const removePhoto = usePhotoStore((s) => s.removePhoto)
   const updateOverrides = usePhotoStore((s) => s.updateOverrides)
@@ -80,7 +81,6 @@ export function PhotoCard({ photo, index = 0 }: PhotoCardProps) {
   const processPhotos = usePhotoStore((s) => s.processPhotos)
 
   const writable = isWritableFormat(photo.format)
-  const isSelected = selectedIds.has(photo.id)
   const camera = photo.overrides.cameraId ? cameras.find((c) => c.id === photo.overrides.cameraId) : null
   const originalDate = formatExifDateTimeForDisplay(photo.originalExif?.dateTimeOriginal)
 
@@ -104,7 +104,13 @@ export function PhotoCard({ photo, index = 0 }: PhotoCardProps) {
     >
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
         {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview, not optimizable by next/image */}
-        <img src={photo.previewUrl} alt="" className="size-full object-cover" />
+        <img
+          src={photo.previewUrl}
+          alt=""
+          className="size-full object-cover"
+          loading="lazy"
+          decoding="async"
+        />
 
         {writable && (
           <label className="absolute top-1.5 left-1.5 flex size-9 items-center justify-center rounded-md bg-background/90 shadow-sm ring-1 ring-border backdrop-blur-sm">
@@ -241,4 +247,4 @@ export function PhotoCard({ photo, index = 0 }: PhotoCardProps) {
       </div>
     </div>
   )
-}
+})
