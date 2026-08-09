@@ -13,7 +13,11 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { CameraPreset } from "@/lib/exif/types"
@@ -26,7 +30,13 @@ interface CameraComboboxProps {
   className?: string
 }
 
-export function CameraCombobox({ cameras, value, onChange, onAddCustom, className }: CameraComboboxProps) {
+export function CameraCombobox({
+  cameras,
+  value,
+  onChange,
+  onAddCustom,
+  className,
+}: CameraComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const [isAddingCustom, setIsAddingCustom] = React.useState(false)
   const [make, setMake] = React.useState("")
@@ -61,11 +71,16 @@ export function CameraCombobox({ cameras, value, onChange, onAddCustom, classNam
         render={
           <Button
             variant="outline"
-            className={cn("w-full justify-between font-normal sm:w-56", className)}
+            className={cn(
+              "w-full justify-between font-normal sm:w-56",
+              className
+            )}
           >
             <span className="flex min-w-0 items-center gap-2">
               <CameraIcon className="size-4 shrink-0 text-muted-foreground" />
-              <span className="truncate">{selected ? selected.label : "Choose camera"}</span>
+              <span className="truncate">
+                {selected ? selected.label : "Choose camera"}
+              </span>
             </span>
             <ChevronsUpDownIcon className="size-4 shrink-0 opacity-50" />
           </Button>
@@ -94,10 +109,19 @@ export function CameraCombobox({ cameras, value, onChange, onAddCustom, classNam
               />
             </div>
             <div className="flex justify-end gap-2 pt-1">
-              <Button type="button" variant="ghost" size="sm" onClick={() => setIsAddingCustom(false)}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsAddingCustom(false)}
+              >
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={!make.trim() || !model.trim()}>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!make.trim() || !model.trim()}
+              >
                 Add camera
               </Button>
             </div>
@@ -114,7 +138,7 @@ export function CameraCombobox({ cameras, value, onChange, onAddCustom, classNam
                     setOpen(false)
                   }}
                 >
-                  Don&apos;t change
+                  Don’t change
                 </CommandItem>
                 {cameras.map((camera) => (
                   <CommandItem
@@ -128,7 +152,9 @@ export function CameraCombobox({ cameras, value, onChange, onAddCustom, classNam
                     <span className="flex flex-col">
                       <span>{camera.label}</span>
                       {camera.note && (
-                        <span className="text-xs text-muted-foreground">{camera.note}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {camera.note}
+                        </span>
                       )}
                     </span>
                   </CommandItem>

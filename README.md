@@ -9,7 +9,8 @@ A small, single-page tool for tagging EXIF metadata — camera and capture date/
 - Drag-and-drop or tap-to-pick import (JPEG and PNG editable; other formats previewable but read-only for now)
 - Per-photo editing (Popover on desktop, bottom Drawer on mobile) or batch-apply to a selection
 - Extensible camera picker — built-in presets (Kodak FunSaver 800, iPhone) plus your own custom cameras, saved locally
-- Date/time picker built from shadcn's Calendar + Select, with an option to **sync the time from another reference photo's EXIF** (time only — never the camera)
+- Date/time picker built from shadcn's Calendar plus a typed `HH:MM` field (digits auto-advance, arrows step and wrap), with an option to **copy the capture time from another reference photo's EXIF** (time only — never the camera or exposure)
+- Optional exposure and lens metadata behind a disclosure: shutter speed, aperture, ISO, focal length, lens model and film stock, all written as proper EXIF rationals
 - No location/GPS fields anywhere; an opt-in toggle can strip any GPS data a photo already has
 - Download a single photo or a `.zip` of a whole batch
 
@@ -18,7 +19,7 @@ A small, single-page tool for tagging EXIF metadata — camera and capture date/
 - Next.js 16.3 (App Router, static export — `output: "export"`, no server/database)
 - shadcn/ui (`base-nova` preset, base-ui primitives) + Tailwind, Inter + Geist Mono
 - Zustand for local UI state
-- `piexif-ts` for in-place JPEG EXIF rewrites, a small hand-rolled PNG `eXIf` chunk writer, `exifr` for reading, `fflate` for zip export
+- `piexif-ts` for in-place JPEG EXIF rewrites, a small hand-rolled PNG `eXIf` chunk writer, `exifr` for reading, `fflate` for zip export — the two writers are loaded on demand so they stay out of the initial bundle
 
 ## Development
 

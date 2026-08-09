@@ -1,3 +1,4 @@
+import { hasTagContent } from "@/lib/exif/build"
 import { writeJpegExif } from "@/lib/exif/write-jpeg"
 import { writePngExif } from "@/lib/exif/write-png"
 import type { PhotoFormat, ResolvedExifEdits } from "@/lib/exif/types"
@@ -20,7 +21,7 @@ export function isWritableFormat(format: PhotoFormat): boolean {
 }
 
 export function hasEdits(edits: ResolvedExifEdits): boolean {
-  return Boolean(edits.make || edits.model || edits.dateTimeOriginal || edits.stripGps)
+  return hasTagContent(edits) || edits.stripGps
 }
 
 export async function applyExifEdits(
@@ -34,7 +35,9 @@ export async function applyExifEdits(
     case "png":
       return writePngExif(file, edits)
     case "unsupported":
-      throw new Error("Metadata editing isn't supported for this file type yet.")
+      throw new Error(
+        "Metadata editing isn’t supported for this file type yet."
+      )
     default: {
       const exhaustive: never = format
       throw new Error(`Unhandled photo format: ${String(exhaustive)}`)

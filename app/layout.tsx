@@ -7,7 +7,13 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/sonner"
 import { cn } from "@/lib/utils"
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
+// `opsz` lets Inter switch to its display cut for the page title and keep
+// the text cut's wider spacing at UI sizes.
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  axes: ["opsz"],
+})
 
 const fontMono = Geist_Mono({
   subsets: ["latin"],
@@ -38,7 +44,12 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", inter.variable)}
+      className={cn(
+        "antialiased",
+        fontMono.variable,
+        "font-sans",
+        inter.variable
+      )}
     >
       <body>
         <ThemeProvider>

@@ -1,44 +1,34 @@
-import piexif from "piexif-ts"
+import type { IExif } from "piexif-ts"
 
-import { arrayBufferToBinaryString, binaryStringToUint8Array } from "@/lib/binary"
+import {
+  arrayBufferToBinaryString,
+  binaryStringToUint8Array,
+} from "@/lib/binary"
+import { buildIfds } from "@/lib/exif/build"
+import { loadPiexif } from "@/lib/exif/piexif"
 import type { ResolvedExifEdits } from "@/lib/exif/types"
-
-// Lab scanners and phones sometimes write slightly malformed tag values.
-// Skip the offending tag instead of throwing so one bad tag can't block a
-// whole batch export.
-piexif.setErrorByPass(true)
 
 /**
  * Rewrites the JPEG's APP1/EXIF segment in place. The compressed image data
  * is never touched, so this can't introduce any generation loss.
  */
-export async function writeJpegExif(file: File | Blob, edits: ResolvedExifEdits): Promise<Blob> {
-  const buffer = await file.arrayBuffer()
+export async function writeJpegExif(
+  file: File | Blob,
+  edits: ResolvedExifEdits
+): Promise<Blob> {
+  const [piexif, buffer] = await Promise.all([loadPiexif(), file.arrayBuffer()])
   const binary = arrayBufferToBinaryString(buffer)
 
-  let existing: piexif.IExif
+  let existing: IExif
   try {
     existing = piexif.load(binary)
   } catch {
     existing = {}
   }
 
-  const zeroth = { ...(existing["0th"] ?? {}) }
-  const exif = { ...(existing["Exif"] ?? {}) }
+  const { zeroth, exif } = await buildIfds(edits, existing)
 
-  if (edits.make) {
-    zeroth[piexif.TagValues.ImageIFD.Make] = edits.make
-  }
-  if (edits.model) {
-    zeroth[piexif.TagValues.ImageIFD.Model] = edits.model
-  }
-  if (edits.dateTimeOriginal) {
-    zeroth[piexif.TagValues.ImageIFD.DateTime] = edits.dateTimeOriginal
-    exif[piexif.TagValues.ExifIFD.DateTimeOriginal] = edits.dateTimeOriginal
-    exif[piexif.TagValues.ExifIFD.DateTimeDigitized] = edits.dateTimeOriginal
-  }
-
-  const nextExif: piexif.IExif = { "0th": zeroth, Exif: exif }
+  const nextExif: IExif = { "0th": zeroth, Exif: exif }
   if (!edits.stripGps && existing.GPS && Object.keys(existing.GPS).length > 0) {
     nextExif.GPS = existing.GPS
   }
