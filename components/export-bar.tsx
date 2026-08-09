@@ -5,6 +5,7 @@ import { DownloadIcon, Loader2Icon } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
+import { downloadBlob, downloadObjectUrl } from "@/lib/download"
 import { createZip, dedupeFileNames } from "@/lib/zip"
 import { usePhotoStore } from "@/lib/store"
 
@@ -21,19 +22,21 @@ async function downloadPhotos(ids: string[], zipName: string) {
     .photos.filter((p) => idSet.has(p.id) && p.resultBlob)
 
   if (photos.length === 0) {
-    toast.error("Couldn't process those photos")
+    const failed = usePhotoStore
+      .getState()
+      .photos.filter((p) => idSet.has(p.id) && p.status === "error")
+    const detail = failed[0]?.error
+    toast.error(detail ? `Couldn't process those photos: ${detail}` : "Couldn't process those photos")
     return
   }
 
   if (photos.length === 1) {
     const photo = photos[0]!
-    const url = photo.resultUrl ?? URL.createObjectURL(photo.resultBlob!)
-    const shouldRevoke = !photo.resultUrl
-    const a = document.createElement("a")
-    a.href = url
-    a.download = photo.name
-    a.click()
-    if (shouldRevoke) setTimeout(() => URL.revokeObjectURL(url), 10_000)
+    if (photo.resultUrl) {
+      downloadObjectUrl(photo.resultUrl, photo.name)
+    } else {
+      downloadBlob(photo.resultBlob!, photo.name)
+    }
     return
   }
 
@@ -43,12 +46,7 @@ async function downloadPhotos(ids: string[], zipName: string) {
     buffers.map((buffer, i) => ({ name: names[i]!, data: new Uint8Array(buffer) }))
   )
 
-  const url = URL.createObjectURL(zipBlob)
-  const a = document.createElement("a")
-  a.href = url
-  a.download = zipName
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  downloadBlob(zipBlob, zipName)
 }
 
 export function ExportBar() {
@@ -64,8 +62,9 @@ export function ExportBar() {
       const { photos, selectedIds } = usePhotoStore.getState()
       const ids = mode === "selected" ? Array.from(selectedIds) : photos.map((p) => p.id)
       await downloadPhotos(ids, mode === "selected" ? "photos-selected.zip" : "photos-all.zip")
-    } catch {
-      toast.error("Export failed — try again")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Export failed — try again"
+      toast.error(message)
     } finally {
       setIsExporting(null)
     }

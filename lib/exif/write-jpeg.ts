@@ -45,6 +45,6 @@ export async function writeJpegExif(file: File | Blob, edits: ResolvedExifEdits)
 
   const exifBytes = piexif.dump(nextExif)
   const newBinary = piexif.insert(exifBytes, binary)
-
-  return new Blob([binaryStringToUint8Array(newBinary)], { type: "image/jpeg" })
+  const bytes = binaryStringToUint8Array(newBinary)
+  return new Blob([bytes], { type: "image/jpeg" })
 }
