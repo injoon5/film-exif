@@ -6,10 +6,16 @@ import {
   saveCustomCameraPreset,
   slugifyCameraId,
 } from "@/lib/cameras"
+import { mapWithConcurrency } from "@/lib/concurrency"
 import { inputValueToExifDateTime } from "@/lib/date"
 import { applyExifEdits, detectPhotoFormat, hasEdits, isWritableFormat } from "@/lib/exif"
 import { readExifSummary } from "@/lib/exif/read"
 import type { CameraPreset, PhotoItem, PhotoOverrides, ResolvedExifEdits } from "@/lib/exif/types"
+import { createPreviewUrl } from "@/lib/preview"
+
+/** Cap parallel decode / EXIF / write work so large batches don't thrash memory. */
+const READ_CONCURRENCY = 4
+const PROCESS_CONCURRENCY = 3
 
 function createId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -33,6 +39,10 @@ function resolveEdits(photo: PhotoItem, cameras: CameraPreset[]): ResolvedExifEd
     dateTimeOriginal: inputValueToExifDateTime(photo.overrides.dateTime),
     stripGps: photo.overrides.stripGps,
   }
+}
+
+function revokeUrl(url: string | undefined): void {
+  if (url) URL.revokeObjectURL(url)
 }
 
 interface PhotoStoreState {
@@ -95,38 +105,53 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
       name: file.name,
       format: detectPhotoFormat(file),
       mimeType: file.type,
+      // Placeholder until the downscaled preview is ready — revoked below.
       previewUrl: URL.createObjectURL(file),
       originalExif: null,
       overrides: defaultOverrides(),
       status: "reading",
     }))
 
+    const selectedIds = new Set(get().selectedIds)
+    for (const photo of newPhotos) {
+      if (isWritableFormat(photo.format)) selectedIds.add(photo.id)
+    }
+
     set((state) => ({
       photos: [...state.photos, ...newPhotos],
-      selectedIds: new Set([
-        ...state.selectedIds,
-        ...newPhotos.filter((p) => isWritableFormat(p.format)).map((p) => p.id),
-      ]),
+      selectedIds,
     }))
 
-    await Promise.all(
-      newPhotos.map(async (photo) => {
-        const summary = await readExifSummary(photo.file)
-        set((state) => ({
-          photos: state.photos.map((p) =>
-            p.id === photo.id ? { ...p, originalExif: summary, status: "ready" } : p
-          ),
-        }))
+    await mapWithConcurrency(newPhotos, READ_CONCURRENCY, async (photo) => {
+      const [summary, previewUrl] = await Promise.all([
+        readExifSummary(photo.file),
+        createPreviewUrl(photo.file),
+      ])
+
+      set((state) => {
+        const existing = state.photos.find((p) => p.id === photo.id)
+        if (!existing) {
+          // Removed while reading — drop the freshly created preview URL.
+          revokeUrl(previewUrl)
+          return state
+        }
+        return {
+          photos: state.photos.map((p) => {
+            if (p.id !== photo.id) return p
+            if (p.previewUrl !== previewUrl) revokeUrl(p.previewUrl)
+            return { ...p, originalExif: summary, previewUrl, status: "ready" }
+          }),
+        }
       })
-    )
+    })
   },
 
   removePhoto: (id) => {
     set((state) => {
       const photo = state.photos.find((p) => p.id === id)
       if (photo) {
-        URL.revokeObjectURL(photo.previewUrl)
-        if (photo.resultUrl) URL.revokeObjectURL(photo.resultUrl)
+        revokeUrl(photo.previewUrl)
+        revokeUrl(photo.resultUrl)
       }
       const selectedIds = new Set(state.selectedIds)
       selectedIds.delete(id)
@@ -136,8 +161,8 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
 
   clearAll: () => {
     for (const photo of get().photos) {
-      URL.revokeObjectURL(photo.previewUrl)
-      if (photo.resultUrl) URL.revokeObjectURL(photo.resultUrl)
+      revokeUrl(photo.previewUrl)
+      revokeUrl(photo.resultUrl)
     }
     set({ photos: [], selectedIds: new Set() })
   },
@@ -175,39 +200,48 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
       photos: state.photos.map((p) => (idSet.has(p.id) ? { ...p, status: "processing" } : p)),
     }))
 
-    await Promise.all(
-      targets.map(async (photo) => {
-        try {
-          const edits = resolveEdits(photo, cameras)
-          const blob =
-            isWritableFormat(photo.format) && hasEdits(edits)
-              ? await applyExifEdits(photo.file, photo.format, edits)
-              : photo.file
+    await mapWithConcurrency(targets, PROCESS_CONCURRENCY, async (photo) => {
+      try {
+        const edits = resolveEdits(photo, cameras)
+        const blob =
+          isWritableFormat(photo.format) && hasEdits(edits)
+            ? await applyExifEdits(photo.file, photo.format, edits)
+            : photo.file
 
-          const resultUrl = URL.createObjectURL(blob)
-          set((state) => ({
-            photos: state.photos.map((p) =>
-              p.id === photo.id
-                ? {
-                    ...p,
-                    status: "done",
-                    resultBlob: blob,
-                    resultUrl,
-                    error: undefined,
-                  }
-                : p
-            ),
-          }))
-        } catch (error) {
-          set((state) => ({
-            photos: state.photos.map((p) =>
-              p.id === photo.id
-                ? { ...p, status: "error", error: error instanceof Error ? error.message : "Failed to write metadata" }
-                : p
-            ),
-          }))
-        }
-      })
-    )
+        const resultUrl = URL.createObjectURL(blob)
+        set((state) => {
+          const existing = state.photos.find((p) => p.id === photo.id)
+          if (!existing) {
+            revokeUrl(resultUrl)
+            return state
+          }
+          return {
+            photos: state.photos.map((p) => {
+              if (p.id !== photo.id) return p
+              if (p.resultUrl && p.resultUrl !== resultUrl) revokeUrl(p.resultUrl)
+              return {
+                ...p,
+                status: "done",
+                resultBlob: blob,
+                resultUrl,
+                error: undefined,
+              }
+            }),
+          }
+        })
+      } catch (error) {
+        set((state) => ({
+          photos: state.photos.map((p) =>
+            p.id === photo.id
+              ? {
+                  ...p,
+                  status: "error",
+                  error: error instanceof Error ? error.message : "Failed to write metadata",
+                }
+              : p
+          ),
+        }))
+      }
+    })
   },
 }))

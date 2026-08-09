@@ -1,5 +1,10 @@
 packages: []
 
+# Delay new publishes so supply-chain malware has time to be yanked.
+minimumReleaseAge: 10080
+# Refuse updates that weaken package trust signals (provenance / signatures).
+trustPolicy: no-downgrade
+
 allowBuilds:
   sharp: true
   unrs-resolver: true

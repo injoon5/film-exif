@@ -18,7 +18,3 @@ export function binaryStringToUint8Array(binary: string): Uint8Array<ArrayBuffer
   }
   return bytes
 }
-
-export async function fileToArrayBuffer(file: File | Blob): Promise<ArrayBuffer> {
-  return file.arrayBuffer()
-}
