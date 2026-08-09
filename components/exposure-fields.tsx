@@ -104,8 +104,12 @@ export function ExposureFields({
         </span>
       </Collapsible.Trigger>
 
-      <Collapsible.Panel className="h-[var(--collapsible-panel-height)] overflow-hidden transition-[height] duration-250 ease-[cubic-bezier(0.2,0,0,1)] data-[ending-style]:h-0 data-[starting-style]:h-0 motion-reduce:transition-none">
-        <div className="flex flex-wrap items-end gap-x-2 gap-y-3 pt-3">
+      {/* The height transition needs `overflow-hidden`, which would otherwise
+          shear the focus ring off the fields sitting flush against the panel
+          edges. The negative margin moves the clip boundary clear of them; the
+          matching padding keeps the fields where they were. */}
+      <Collapsible.Panel className="-mx-2 h-[var(--collapsible-panel-height)] overflow-hidden px-2 transition-[height] duration-250 ease-[cubic-bezier(0.2,0,0,1)] data-[ending-style]:h-0 data-[starting-style]:h-0 motion-reduce:transition-none">
+        <div className="flex flex-wrap items-end gap-x-2 gap-y-3 pt-3 pb-1.5">
           <ExposureInput
             id={`${idPrefix}-shutter`}
             className={short}
