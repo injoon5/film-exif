@@ -6,18 +6,30 @@ import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { exifDateTimeToInputValue, formatTimeOfDay } from "@/lib/date"
 import { readExifSummary } from "@/lib/exif/read"
 
 interface SyncTimeButtonProps {
   /** Called with a datetime-local value ("YYYY-MM-DDTHH:mm") read from the reference photo. */
   onSync: (value: string) => void
+  /**
+   * `row` is the labelled, full-width version for the date popover's footer.
+   * `icon` is the compact version that sits beside the field itself, so the
+   * feature is visible without opening anything first.
+   */
+  variant?: "row" | "icon"
   className?: string
 }
 
 type SyncState = "idle" | "reading" | "done"
 
 const SUCCESS_HOLD_MS = 2400
+const LABEL = "Copy time from a photo…"
 
 /**
  * Lets the user pick a *reference* photo (one that already has the right
@@ -25,11 +37,14 @@ const SUCCESS_HOLD_MS = 2400
  * the same roll) purely to copy its capture time — never its camera or
  * exposure. The reference file itself is read in-memory and discarded.
  *
- * Presented as a self-contained action row rather than a trailing button, and
- * it reports what it did in place: picking a file, waiting, and landing a
- * value are three distinct states you can watch happen.
+ * It reports what it did in place rather than through a toast: picking a file,
+ * waiting, and landing a value are three states you can watch happen.
  */
-export function SyncTimeButton({ onSync, className }: SyncTimeButtonProps) {
+export function SyncTimeButton({
+  onSync,
+  variant = "row",
+  className,
+}: SyncTimeButtonProps) {
   const inputRef = React.useRef<HTMLInputElement>(null)
   const [state, setState] = React.useState<SyncState>("idle")
   const [copied, setCopied] = React.useState<string | null>(null)
@@ -66,6 +81,67 @@ export function SyncTimeButton({ onSync, className }: SyncTimeButtonProps) {
     }
   }
 
+  const icons = (
+    <span className="relative flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+      <SwapIcon show={state === "idle"}>
+        <ClockArrowDownIcon className="size-4" />
+      </SwapIcon>
+      <SwapIcon show={state === "reading"}>
+        <Loader2Icon className="size-4 animate-spin" />
+      </SwapIcon>
+      <SwapIcon show={state === "done"}>
+        <CheckIcon className="size-4 text-foreground" />
+      </SwapIcon>
+    </span>
+  )
+
+  const picker = (
+    <input
+      ref={inputRef}
+      type="file"
+      accept="image/*"
+      className="hidden"
+      tabIndex={-1}
+      onChange={(event) => {
+        void handleFile(event.target.files?.[0])
+        event.target.value = ""
+      }}
+    />
+  )
+
+  if (variant === "icon") {
+    return (
+      <>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                // Outline, not ghost: a bare glyph next to the field reads as
+                // decoration, and this is the entry point to a whole feature.
+                variant="outline"
+                size="icon"
+                aria-label={LABEL}
+                onClick={() => inputRef.current?.click()}
+                disabled={state === "reading"}
+                className={cn(
+                  "shrink-0 transition-transform active:scale-[0.96] disabled:opacity-100",
+                  className
+                )}
+              >
+                {icons}
+              </Button>
+            }
+          />
+          <TooltipContent>
+            Copy the capture time from another photo
+          </TooltipContent>
+        </Tooltip>
+        {picker}
+      </>
+    )
+  }
+
   return (
     <>
       <Button
@@ -79,21 +155,11 @@ export function SyncTimeButton({ onSync, className }: SyncTimeButtonProps) {
           className
         )}
       >
-        <span className="relative flex size-4 shrink-0 items-center justify-center text-muted-foreground">
-          <SwapIcon show={state === "idle"}>
-            <ClockArrowDownIcon className="size-4" />
-          </SwapIcon>
-          <SwapIcon show={state === "reading"}>
-            <Loader2Icon className="size-4 animate-spin" />
-          </SwapIcon>
-          <SwapIcon show={state === "done"}>
-            <CheckIcon className="size-4 text-foreground" />
-          </SwapIcon>
-        </span>
+        {icons}
 
         {/* Fixed-width stack: the label changes, the button never resizes. */}
         <span className="relative block h-4 min-w-0 flex-1">
-          <SwapLabel show={state === "idle"}>Copy time from a photo…</SwapLabel>
+          <SwapLabel show={state === "idle"}>{LABEL}</SwapLabel>
           <SwapLabel
             show={state === "reading"}
             className="text-muted-foreground"
@@ -108,17 +174,7 @@ export function SyncTimeButton({ onSync, className }: SyncTimeButtonProps) {
         </span>
       </Button>
 
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        tabIndex={-1}
-        onChange={(event) => {
-          void handleFile(event.target.files?.[0])
-          event.target.value = ""
-        }}
-      />
+      {picker}
     </>
   )
 }

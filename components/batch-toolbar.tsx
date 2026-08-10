@@ -149,6 +149,7 @@ export function BatchToolbar() {
             <div className="flex flex-wrap items-end gap-2">
               <Field label="Camera">
                 <CameraCombobox
+                  className="w-full sm:w-56"
                   cameras={cameras}
                   value={cameraId}
                   onChange={setCameraId}

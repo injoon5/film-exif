@@ -77,7 +77,6 @@ function PhotoEditFields({
           value={photo.overrides.cameraId}
           onChange={(id) => onUpdate({ cameraId: id })}
           onAddCustom={onAddCustomCamera}
-          className="w-full"
         />
       </div>
 

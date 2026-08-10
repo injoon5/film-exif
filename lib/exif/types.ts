@@ -5,7 +5,6 @@ export interface CameraPreset {
   label: string
   make: string
   model: string
-  note?: string
   /** Box speed of the film this camera ships with — used only as an input hint. */
   iso?: number
   custom?: boolean

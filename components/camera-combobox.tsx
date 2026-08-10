@@ -9,6 +9,7 @@ import {
   Command,
   CommandEmpty,
   CommandGroup,
+  CommandInput,
   CommandItem,
   CommandList,
   CommandSeparator,
@@ -30,6 +31,9 @@ interface CameraComboboxProps {
   className?: string
 }
 
+/** cmdk needs a non-empty value to highlight the "leave it alone" row. */
+const NO_CAMERA = "__none__"
+
 export function CameraCombobox({
   cameras,
   value,
@@ -41,6 +45,10 @@ export function CameraCombobox({
   const [isAddingCustom, setIsAddingCustom] = React.useState(false)
   const [make, setMake] = React.useState("")
   const [model, setModel] = React.useState("")
+  // cmdk highlights whatever it considers active and defaults to the first
+  // row. Seeding it with the current camera makes the highlight read as "this
+  // is the one you picked" instead of a hover that got stuck.
+  const [active, setActive] = React.useState(value ?? NO_CAMERA)
 
   const selected = cameras.find((c) => c.id === value) ?? null
 
@@ -50,12 +58,17 @@ export function CameraCombobox({
     setModel("")
   }
 
+  function choose(id: string | null) {
+    onChange(id)
+    setActive(id ?? NO_CAMERA)
+    setOpen(false)
+  }
+
   function handleAddCustom(event: React.FormEvent) {
     event.preventDefault()
     if (!make.trim() || !model.trim()) return
     const preset = onAddCustom(make.trim(), model.trim())
-    onChange(preset.id)
-    setOpen(false)
+    choose(preset.id)
     reset()
   }
 
@@ -64,17 +77,15 @@ export function CameraCombobox({
       open={open}
       onOpenChange={(next) => {
         setOpen(next)
-        if (!next) reset()
+        if (next) setActive(value ?? NO_CAMERA)
+        else reset()
       }}
     >
       <PopoverTrigger
         render={
           <Button
             variant="outline"
-            className={cn(
-              "w-full justify-between font-normal sm:w-56",
-              className
-            )}
+            className={cn("w-full justify-between font-normal", className)}
           >
             <span className="flex min-w-0 items-center gap-2">
               <CameraIcon className="size-4 shrink-0 text-muted-foreground" />
@@ -108,6 +119,9 @@ export function CameraCombobox({
                 onChange={(e) => setModel(e.target.value)}
               />
             </div>
+            <p className="text-xs text-pretty text-muted-foreground">
+              Written to the photo exactly as typed, and saved for next time.
+            </p>
             <div className="flex justify-end gap-2 pt-1">
               <Button
                 type="button"
@@ -127,42 +141,57 @@ export function CameraCombobox({
             </div>
           </form>
         ) : (
-          <Command>
+          <Command value={active} onValueChange={setActive}>
+            {/* Always rendered, even for three rows: cmdk routes arrow keys
+                and Enter through this input, so without it the list can only
+                be used with a mouse. */}
+            <CommandInput placeholder="Search cameras…" />
             <CommandList>
-              <CommandEmpty>No cameras found.</CommandEmpty>
-              <CommandGroup heading="Cameras">
+              <CommandEmpty>No cameras match.</CommandEmpty>
+
+              {/* Not a camera, so it sits above the heading rather than under it. */}
+              <CommandGroup>
                 <CommandItem
+                  value={NO_CAMERA}
+                  keywords={["don't change", "none", "keep"]}
                   data-checked={value === null}
-                  onSelect={() => {
-                    onChange(null)
-                    setOpen(false)
-                  }}
+                  onSelect={() => choose(null)}
                 >
                   Don’t change
                 </CommandItem>
+              </CommandGroup>
+
+              <CommandSeparator />
+
+              <CommandGroup heading="Cameras">
                 {cameras.map((camera) => (
                   <CommandItem
                     key={camera.id}
+                    value={camera.id}
+                    keywords={[camera.label, camera.make, camera.model]}
                     data-checked={value === camera.id}
-                    onSelect={() => {
-                      onChange(camera.id)
-                      setOpen(false)
-                    }}
+                    onSelect={() => choose(camera.id)}
                   >
-                    <span className="flex flex-col">
-                      <span>{camera.label}</span>
-                      {camera.note && (
-                        <span className="text-xs text-muted-foreground">
-                          {camera.note}
-                        </span>
-                      )}
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className="truncate">{camera.label}</span>
+                      {/* The tag that actually gets written — more use than
+                          prose, and it keeps every row the same height. */}
+                      <span className="truncate font-mono text-xs text-muted-foreground">
+                        {camera.make} {camera.model}
+                      </span>
                     </span>
                   </CommandItem>
                 ))}
               </CommandGroup>
+
               <CommandSeparator />
+
               <CommandGroup>
-                <CommandItem onSelect={() => setIsAddingCustom(true)}>
+                <CommandItem
+                  value="__add__"
+                  keywords={["add", "custom", "new camera"]}
+                  onSelect={() => setIsAddingCustom(true)}
+                >
                   <PlusIcon />
                   Add custom camera
                 </CommandItem>

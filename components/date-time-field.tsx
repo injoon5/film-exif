@@ -114,6 +114,11 @@ export function DateTimeField({
         </PopoverContent>
       </Popover>
 
+      {/* Also lives in the popover footer, but a feature you have to open a
+          date picker to discover may as well not exist — so it gets a
+          permanent home next to the field it fills. */}
+      {allowSync && <SyncTimeButton variant="icon" onSync={onChange} />}
+
       {value && (
         <Button
           variant="ghost"
