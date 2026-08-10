@@ -125,5 +125,6 @@
     }
   html {
     @apply font-sans;
+    font-optical-sizing: auto;
     }
 }

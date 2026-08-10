@@ -1,6 +1,6 @@
-import piexif from "piexif-ts"
-
 import { binaryStringToUint8Array } from "@/lib/binary"
+import { buildIfds, hasTagContent } from "@/lib/exif/build"
+import { loadPiexif } from "@/lib/exif/piexif"
 import type { ResolvedExifEdits } from "@/lib/exif/types"
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
@@ -32,7 +32,9 @@ function crc32(bytes: Uint8Array): number {
   return (crc ^ 0xffffffff) >>> 0
 }
 
-function concatUint8Arrays(parts: Uint8Array<ArrayBuffer>[]): Uint8Array<ArrayBuffer> {
+function concatUint8Arrays(
+  parts: Uint8Array<ArrayBuffer>[]
+): Uint8Array<ArrayBuffer> {
   const total = parts.reduce((sum, part) => sum + part.length, 0)
   const result = new Uint8Array(total)
   let offset = 0
@@ -66,7 +68,9 @@ function parsePngChunks(bytes: Uint8Array<ArrayBuffer>): PngChunk[] {
 function serializePngChunks(chunks: PngChunk[]): Uint8Array<ArrayBuffer> {
   const parts: Uint8Array<ArrayBuffer>[] = [Uint8Array.from(PNG_SIGNATURE)]
   for (const chunk of chunks) {
-    const typeBytes = Uint8Array.from(Array.from(chunk.type, (c) => c.charCodeAt(0)))
+    const typeBytes = Uint8Array.from(
+      Array.from(chunk.type, (c) => c.charCodeAt(0))
+    )
     const lengthBytes = new Uint8Array(4)
     new DataView(lengthBytes.buffer).setUint32(0, chunk.data.length)
 
@@ -82,18 +86,13 @@ function serializePngChunks(chunks: PngChunk[]): Uint8Array<ArrayBuffer> {
 /** Builds the raw TIFF/Exif byte block PNG's `eXIf` chunk expects — the same
  * bytes as a JPEG APP1 segment, minus the 6-byte "Exif\0\0" marker that's
  * only meaningful inside a JPEG. */
-function buildTiffExifBlock(edits: ResolvedExifEdits): Uint8Array<ArrayBuffer> {
-  const zeroth: piexif.IExifElement = {}
-  const exif: piexif.IExifElement = {}
-
-  if (edits.make) zeroth[piexif.TagValues.ImageIFD.Make] = edits.make
-  if (edits.model) zeroth[piexif.TagValues.ImageIFD.Model] = edits.model
-  if (edits.dateTimeOriginal) {
-    zeroth[piexif.TagValues.ImageIFD.DateTime] = edits.dateTimeOriginal
-    exif[piexif.TagValues.ExifIFD.DateTimeOriginal] = edits.dateTimeOriginal
-    exif[piexif.TagValues.ExifIFD.DateTimeDigitized] = edits.dateTimeOriginal
-  }
-
+async function buildTiffExifBlock(
+  edits: ResolvedExifEdits
+): Promise<Uint8Array<ArrayBuffer>> {
+  const [piexif, { zeroth, exif }] = await Promise.all([
+    loadPiexif(),
+    buildIfds(edits),
+  ])
   const exifBinaryWithJpegMarker = piexif.dump({ "0th": zeroth, Exif: exif })
   return binaryStringToUint8Array(exifBinaryWithJpegMarker.slice(6))
 }
@@ -103,11 +102,14 @@ function buildTiffExifBlock(edits: ResolvedExifEdits): Uint8Array<ArrayBuffer> {
  * `IHDR` (before `PLTE`/`IDAT`, as required by the PNG spec). Pixel data
  * (`IDAT`) is never touched or re-encoded.
  */
-export async function writePngExif(file: File | Blob, edits: ResolvedExifEdits): Promise<Blob> {
+export async function writePngExif(
+  file: File | Blob,
+  edits: ResolvedExifEdits
+): Promise<Blob> {
   const buffer = await file.arrayBuffer()
   const bytes = new Uint8Array(buffer)
 
-  const hasContent = Boolean(edits.make || edits.model || edits.dateTimeOriginal)
+  const hasContent = hasTagContent(edits)
   if (!hasContent && !edits.stripGps) {
     return new Blob([buffer], { type: "image/png" })
   }
@@ -117,7 +119,10 @@ export async function writePngExif(file: File | Blob, edits: ResolvedExifEdits):
   if (hasContent) {
     const ihdrIndex = chunks.findIndex((chunk) => chunk.type === "IHDR")
     const insertAt = ihdrIndex === -1 ? 0 : ihdrIndex + 1
-    chunks.splice(insertAt, 0, { type: "eXIf", data: buildTiffExifBlock(edits) })
+    chunks.splice(insertAt, 0, {
+      type: "eXIf",
+      data: await buildTiffExifBlock(edits),
+    })
   }
 
   const out = serializePngChunks(chunks)

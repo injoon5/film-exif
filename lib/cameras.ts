@@ -6,14 +6,13 @@ export const BUILT_IN_CAMERA_PRESETS: CameraPreset[] = [
     label: "Kodak FunSaver 800",
     make: "Kodak",
     model: "FUNSAVER 800",
-    note: "Single-use 35mm film camera",
+    iso: 800,
   },
   {
     id: "iphone",
     label: "iPhone",
     make: "Apple",
     model: "iPhone",
-    note: "Generic — pick a custom entry below if you want a specific model",
   },
 ]
 
@@ -44,7 +43,10 @@ export function loadCustomCameraPresets(): CameraPreset[] {
 }
 
 export function saveCustomCameraPreset(preset: CameraPreset): CameraPreset[] {
-  const next = [...loadCustomCameraPresets().filter((p) => p.id !== preset.id), preset]
+  const next = [
+    ...loadCustomCameraPresets().filter((p) => p.id !== preset.id),
+    preset,
+  ]
   if (typeof window !== "undefined") {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
   }
