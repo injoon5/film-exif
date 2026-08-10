@@ -4,21 +4,26 @@ import * as React from "react"
 import { ImageDownIcon, LockIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { BatchToolbar } from "@/components/batch-toolbar"
 import { ExportBar } from "@/components/export-bar"
 import { PhotoDropzone } from "@/components/photo-dropzone"
 import { PhotoGrid } from "@/components/photo-grid"
+import { PhotoTable } from "@/components/photo-table"
 import { useWindowFileDrop } from "@/hooks/use-file-drop"
+import { isPhotoView } from "@/lib/preferences"
 import { usePhotoStore } from "@/lib/store"
 
 export default function Page() {
   const photoCount = usePhotoStore((s) => s.photos.length)
   const addFiles = usePhotoStore((s) => s.addFiles)
-  const hydrateCameras = usePhotoStore((s) => s.hydrateCameras)
+  const hydratePreferences = usePhotoStore((s) => s.hydratePreferences)
+  const view = usePhotoStore((s) => s.view)
+  const setView = usePhotoStore((s) => s.setView)
 
   React.useEffect(() => {
-    hydrateCameras()
-  }, [hydrateCameras])
+    hydratePreferences()
+  }, [hydratePreferences])
 
   const isDragging = useWindowFileDrop(addFiles)
 
@@ -46,10 +51,23 @@ export default function Page() {
             className="flex-1"
           />
         ) : (
-          <>
+          // `contents` keeps the tab root out of the layout: the toolbar and
+          // the active panel stay direct children of the flex column.
+          <Tabs
+            className="contents"
+            value={view}
+            onValueChange={(next) => {
+              if (isPhotoView(next)) setView(next)
+            }}
+          >
             <BatchToolbar />
-            <PhotoGrid />
-          </>
+            <TabsContent value="grid">
+              <PhotoGrid />
+            </TabsContent>
+            <TabsContent value="table">
+              <PhotoTable />
+            </TabsContent>
+          </Tabs>
         )}
       </main>
 

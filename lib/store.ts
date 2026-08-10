@@ -28,6 +28,7 @@ import type {
   PhotoOverrides,
   ResolvedExifEdits,
 } from "@/lib/exif/types"
+import { loadPhotoView, savePhotoView, type PhotoView } from "@/lib/preferences"
 import { createPreviewUrl } from "@/lib/preview"
 
 /** Cap parallel decode / EXIF / write work so large batches don't thrash memory. */
@@ -91,8 +92,10 @@ interface PhotoStoreState {
   photos: PhotoItem[]
   selectedIds: Set<string>
   cameras: CameraPreset[]
+  view: PhotoView
 
-  hydrateCameras: () => void
+  hydratePreferences: () => void
+  setView: (view: PhotoView) => void
   addCustomCamera: (make: string, model: string, label?: string) => CameraPreset
 
   addFiles: (files: File[]) => Promise<void>
@@ -113,16 +116,30 @@ export const usePhotoStore = create<PhotoStoreState>((set, get) => ({
   photos: [],
   selectedIds: new Set(),
   cameras: BUILT_IN_CAMERA_PRESETS,
+  // Server-rendered default; the stored choice is applied after mount so the
+  // markup React hydrates against always matches.
+  view: "grid",
 
-  hydrateCameras: () => {
+  hydratePreferences: () => {
     const custom = loadCustomCameraPresets()
-    if (custom.length === 0) return
+    const view = loadPhotoView()
     set((state) => ({
-      cameras: [
-        ...state.cameras,
-        ...custom.filter((c) => !state.cameras.some((b) => b.id === c.id)),
-      ],
+      view: view ?? state.view,
+      cameras:
+        custom.length === 0
+          ? state.cameras
+          : [
+              ...state.cameras,
+              ...custom.filter(
+                (c) => !state.cameras.some((b) => b.id === c.id)
+              ),
+            ],
     }))
+  },
+
+  setView: (view) => {
+    savePhotoView(view)
+    set({ view })
   },
 
   addCustomCamera: (make, model, label) => {

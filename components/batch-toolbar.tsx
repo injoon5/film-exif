@@ -1,11 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { CheckIcon } from "lucide-react"
+import { CheckIcon, LayoutGridIcon, Rows3Icon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Tooltip,
   TooltipContent,
@@ -140,6 +141,17 @@ export function BatchToolbar() {
                 {allSelected ? "Clear selection" : "Select all"}
               </Button>
               <PhotoDropzone variant="compact" onFiles={addFiles} />
+              <Separator orientation="vertical" className="mx-0.5 h-5" />
+              <TabsList aria-label="Layout">
+                <TabsTrigger value="grid" className="px-2">
+                  <LayoutGridIcon />
+                  <span className="sr-only sm:not-sr-only">Grid</span>
+                </TabsTrigger>
+                <TabsTrigger value="table" className="px-2">
+                  <Rows3Icon />
+                  <span className="sr-only sm:not-sr-only">Table</span>
+                </TabsTrigger>
+              </TabsList>
             </div>
           </div>
 

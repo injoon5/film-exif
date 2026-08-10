@@ -3,7 +3,6 @@
 import * as React from "react"
 import {
   CameraIcon,
-  CheckIcon,
   DownloadIcon,
   FilmIcon,
   Loader2Icon,
@@ -12,165 +11,49 @@ import {
   TriangleAlertIcon,
   XIcon,
 } from "lucide-react"
-import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer"
-import { Label } from "@/components/ui/label"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { CameraCombobox } from "@/components/camera-combobox"
-import { DateTimeField } from "@/components/date-time-field"
-import { ExposureFields } from "@/components/exposure-fields"
-import { useIsMobile } from "@/hooks/use-mobile"
+import { PhotoEditor, downloadSinglePhoto } from "@/components/photo-editor"
 import { formatInputValueForDisplay } from "@/lib/date"
-import { downloadObjectUrl } from "@/lib/download"
 import { isWritableFormat } from "@/lib/exif"
 import {
   describeExifSummary,
   describeExposureOverrides,
 } from "@/lib/exif/describe"
 import { usePhoto, usePhotoStore } from "@/lib/store"
-import type { CameraPreset, PhotoItem, PhotoOverrides } from "@/lib/exif/types"
 
 interface PhotoCardProps {
   id: string
   index?: number
 }
 
-interface PhotoEditFieldsProps {
-  photo: PhotoItem
-  camera: CameraPreset | null
-  cameras: CameraPreset[]
-  onUpdate: (overrides: Partial<PhotoOverrides>) => void
-  onAddCustomCamera: (make: string, model: string) => CameraPreset
-}
-
-function PhotoEditFields({
-  photo,
-  camera,
-  cameras,
-  onUpdate,
-  onAddCustomCamera,
-}: PhotoEditFieldsProps) {
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <Label>Camera</Label>
-        <CameraCombobox
-          cameras={cameras}
-          value={photo.overrides.cameraId}
-          onChange={(id) => onUpdate({ cameraId: id })}
-          onAddCustom={onAddCustomCamera}
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label>Date &amp; time taken</Label>
-        <DateTimeField
-          value={photo.overrides.dateTime}
-          onChange={(value) => onUpdate({ dateTime: value })}
-          className="w-full"
-        />
-      </div>
-
-      <ExposureFields
-        idPrefix={photo.id}
-        values={photo.overrides}
-        onChange={onUpdate}
-        original={photo.originalExif}
-        camera={camera}
-      />
-
-      {photo.originalExif?.hasGps && (
-        <label className="-mx-1 flex items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-muted/60">
-          <Checkbox
-            checked={photo.overrides.stripGps}
-            onCheckedChange={(checked) =>
-              onUpdate({ stripGps: checked === true })
-            }
-          />
-          Remove the GPS location this photo carries
-        </label>
-      )}
-    </div>
-  )
-}
-
 export const PhotoCard = React.memo(function PhotoCard({
   id,
   index = 0,
 }: PhotoCardProps) {
-  const isMobile = useIsMobile()
   const photo = usePhoto(id)
   const cameras = usePhotoStore((s) => s.cameras)
   // Per-id selector so toggling one checkbox doesn't re-render every card.
   const isSelected = usePhotoStore((s) => s.selectedIds.has(id))
   const toggleSelected = usePhotoStore((s) => s.toggleSelected)
   const removePhoto = usePhotoStore((s) => s.removePhoto)
-  const updateOverrides = usePhotoStore((s) => s.updateOverrides)
-  const addCustomCamera = usePhotoStore((s) => s.addCustomCamera)
-  const processPhotos = usePhotoStore((s) => s.processPhotos)
 
   if (!photo) return null
 
   // Left unmemoised on purpose: these are a `find` over a handful of presets
   // and some string joins, and the compiler handles the rest.
-  const update = (overrides: Partial<PhotoOverrides>) =>
-    updateOverrides([id], overrides)
   const camera = photo.overrides.cameraId
     ? (cameras.find((c) => c.id === photo.overrides.cameraId) ?? null)
     : null
   const originalSummary = describeExifSummary(photo.originalExif)
   const exposureSummary = describeExposureOverrides(photo.overrides)
+  const filmStock = photo.overrides.filmStock?.trim()
 
   const writable = isWritableFormat(photo.format)
   const isBusy = photo.status === "processing"
-
-  async function handleDownloadSingle() {
-    try {
-      await processPhotos([id])
-      const latest = usePhotoStore.getState().photos.find((p) => p.id === id)
-      if (!latest?.resultUrl) {
-        toast.error(
-          latest?.error
-            ? `Couldn’t process this photo: ${latest.error}`
-            : "Couldn’t process this photo"
-        )
-        return
-      }
-      downloadObjectUrl(latest.resultUrl, latest.name)
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Couldn’t process this photo"
-      )
-    }
-  }
-
-  const editFields = (
-    <PhotoEditFields
-      photo={photo}
-      camera={camera}
-      cameras={cameras}
-      onUpdate={update}
-      onAddCustomCamera={addCustomCamera}
-    />
-  )
 
   return (
     <article
@@ -199,11 +82,14 @@ export const PhotoCard = React.memo(function PhotoCard({
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
         {photo.previewUrl ? (
           <>
+            {/* No outline of its own: the image is flush to the card edge, so
+                the card's hairline already draws that boundary — adding one
+                here puts two lines a pixel apart. */}
             {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview, not optimizable by next/image */}
             <img
               src={photo.previewUrl}
               alt=""
-              className="size-full object-cover outline -outline-offset-1 outline-black/10 motion-safe:animate-in motion-safe:duration-300 motion-safe:fade-in dark:outline-white/10"
+              className="size-full object-cover motion-safe:animate-in motion-safe:duration-300 motion-safe:fade-in"
               loading="lazy"
               decoding="async"
             />
@@ -220,7 +106,7 @@ export const PhotoCard = React.memo(function PhotoCard({
         {writable && (
           <label
             className={cn(
-              "absolute top-2 left-2 flex size-8 cursor-pointer items-center justify-center rounded-lg bg-background/85 shadow-sm ring-1 ring-black/10 backdrop-blur-md transition-opacity duration-150 dark:ring-white/15",
+              "absolute top-2 left-2 flex size-8 cursor-pointer items-center justify-center rounded-lg bg-background/85 shadow-sm backdrop-blur-md transition-opacity duration-150",
               "sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100 sm:group-data-selected:opacity-100"
             )}
           >
@@ -235,7 +121,7 @@ export const PhotoCard = React.memo(function PhotoCard({
         <Button
           variant="secondary"
           size="icon-sm"
-          className="absolute top-2 right-2 bg-background/85 shadow-sm ring-1 ring-black/10 backdrop-blur-md transition-[opacity,scale] duration-150 hover:bg-background active:scale-[0.96] sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100 dark:ring-white/15"
+          className="absolute top-2 right-2 bg-background/85 shadow-sm backdrop-blur-md transition-[opacity,scale] duration-150 hover:bg-background active:scale-[0.96] sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100"
           onClick={() => removePhoto(id)}
           aria-label={`Remove ${photo.name}`}
         >
@@ -254,7 +140,7 @@ export const PhotoCard = React.memo(function PhotoCard({
         {(camera ||
           photo.overrides.dateTime ||
           exposureSummary ||
-          photo.overrides.filmStock?.trim() ||
+          filmStock ||
           !writable ||
           photo.originalExif?.hasGps) && (
           <div className="flex flex-wrap items-center gap-1.5">
@@ -283,16 +169,14 @@ export const PhotoCard = React.memo(function PhotoCard({
                 {exposureSummary}
               </Badge>
             )}
-            {photo.overrides.filmStock?.trim() && (
+            {filmStock && (
               <Badge
                 variant="secondary"
                 className="max-w-full gap-1"
-                title={photo.overrides.filmStock.trim()}
+                title={filmStock}
               >
                 <FilmIcon className="size-3 shrink-0" />
-                <span className="truncate">
-                  {photo.overrides.filmStock.trim()}
-                </span>
+                <span className="truncate">{filmStock}</span>
               </Badge>
             )}
             {photo.originalExif?.hasGps && (
@@ -325,70 +209,15 @@ export const PhotoCard = React.memo(function PhotoCard({
 
         <div className="mt-auto flex items-center gap-1 pt-1">
           {writable ? (
-            isMobile ? (
-              <Drawer>
-                <DrawerTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 active:scale-[0.98]"
-                    >
-                      <PencilIcon />
-                      Edit
-                    </Button>
-                  }
-                />
-                <DrawerContent>
-                  <DrawerHeader className="text-left">
-                    <DrawerTitle className="truncate font-mono text-sm">
-                      {photo.name}
-                    </DrawerTitle>
-                    <DrawerDescription>
-                      Changes apply only when you export this photo.
-                    </DrawerDescription>
-                  </DrawerHeader>
-                  <div className="overflow-y-auto px-4 pt-1 pb-2">
-                    {editFields}
-                  </div>
-                  <DrawerFooter>
-                    <DrawerClose
-                      render={
-                        <Button>
-                          <CheckIcon />
-                          Done
-                        </Button>
-                      }
-                    />
-                  </DrawerFooter>
-                </DrawerContent>
-              </Drawer>
-            ) : (
-              <Popover>
-                <PopoverTrigger
-                  render={
-                    <Button variant="outline" size="sm" className="flex-1">
-                      <PencilIcon />
-                      Edit
-                    </Button>
-                  }
-                />
-                <PopoverContent className="w-84" align="start">
-                  <div className="mb-3 flex flex-col gap-0.5">
-                    <p
-                      className="truncate font-mono text-xs font-medium"
-                      title={photo.name}
-                    >
-                      {photo.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Changes apply only when you export this photo.
-                    </p>
-                  </div>
-                  {editFields}
-                </PopoverContent>
-              </Popover>
-            )
+            <PhotoEditor
+              photo={photo}
+              trigger={
+                <Button variant="outline" size="sm" className="flex-1">
+                  <PencilIcon />
+                  Edit
+                </Button>
+              }
+            />
           ) : (
             <span className="flex-1 text-xs text-muted-foreground">
               Preview only — export keeps the original untouched.
@@ -399,7 +228,7 @@ export const PhotoCard = React.memo(function PhotoCard({
             variant="ghost"
             size="sm"
             className="text-muted-foreground transition-transform hover:text-foreground active:scale-[0.96]"
-            onClick={handleDownloadSingle}
+            onClick={() => void downloadSinglePhoto(id)}
             disabled={isBusy}
             aria-label={`Download ${photo.name}`}
           >
